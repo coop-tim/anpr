@@ -1,5 +1,6 @@
 import os
 import cv2
+import keras
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Reshape, LSTM, Bidirectional, Dense, Lambda
@@ -8,9 +9,7 @@ from sklearn.model_selection import train_test_split
 
 # Parameters
 img_width, img_height = 128, 64
-num_classes = len("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") + 1  # 36 characters + 1 for blank (CTC)
-
-# Character dictionary
+num_classes = len("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") + 1
 char_list = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 # Function to map characters to labels
@@ -26,31 +25,29 @@ def load_images_and_labels(directory):
             img_path = os.path.join(directory, filename)
             img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
             img = cv2.resize(img, (img_width, img_height))
-            img = img / 255.0  # Normalize
+            img = img / 255.0  # Normalise
             images.append(img)
-            label = filename.split('.')[0]  # Assuming label is part of filename
+            label = filename.split('.')[0]
             labels.append(encode_label(label))
     return np.array(images), labels
 
 yellow_images, yellow_labels = load_images_and_labels('yellowplate')
 white_images, white_labels = load_images_and_labels('whiteplate')
 
-# Combine images and labels
 images = np.concatenate([yellow_images, white_images])
 labels = yellow_labels + white_labels
 
-# Split into training and validation sets
 X_train, X_test, y_train, y_test = train_test_split(images, labels, test_size=0.2, random_state=42)
 
 # Input shape for the model
 input_shape = (img_height, img_width, 1)
 
 # Define the CTC loss function
+@keras.saving.register_keras_serializable()
 def ctc_loss_lambda_func(args):
     y_pred, labels, input_length, label_length = args
     return tf.keras.backend.ctc_batch_cost(labels, y_pred, input_length, label_length)
 
-# Build the model
 inputs = Input(shape=input_shape)
 
 # CNN layers for feature extraction
@@ -78,38 +75,33 @@ label_length = Input(name='label_length', shape=[1], dtype='int64')
 # CTC loss layer
 ctc_loss = Lambda(ctc_loss_lambda_func, output_shape=(1,), name='ctc')([x, labels, input_length, label_length])
 
-# Define the model
 model = Model(inputs=[inputs, labels, input_length, label_length], outputs=ctc_loss)
-
-# Compile the model with CTC loss
-# Compile the model with a dummy loss, as the CTC loss is already computed in the Lambda layer
 model.compile(optimizer='adam', loss={'ctc': lambda y_true, y_pred: y_pred})
-
-
-# Show the model summary
 model.summary()
 
 # Train the model
-# Prepare the inputs and labels for CTC loss function
 y_train_padded = tf.keras.preprocessing.sequence.pad_sequences(y_train, maxlen=10, padding='post')
 train_input_length = np.ones((len(X_train), 1)) * (img_width // 4)
 train_label_length = np.array([len(label) for label in y_train]).reshape(-1, 1)
 
-# Fit the model (you can add validation_data similarly)
+# Fit the model
 model.fit(x=[X_train, y_train_padded, train_input_length, train_label_length],
           y=np.zeros(len(X_train)), epochs=10, batch_size=32)
 
 # Save the model
 model.save('license_plate_model.h5')
 
+model_inference = Model(inputs=inputs, outputs=x)
+
 # Testing with new image
 def predict_plate(image_path):
+    # Load model
+    model = tf.keras.models.load_model('license_plate_inference_model.h5', compile=False)
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     img = cv2.resize(img, (img_width, img_height))
     img = img / 255.0
-    img = np.expand_dims(img, axis=[0, -1])  # Add batch and channel dimensions
-    
-    # Predict
+    img = np.expand_dims(img, axis=[0, -1])
+
     prediction = model.predict([img, np.ones((1, 1)) * (img_width // 4)])
     
     # Decode the prediction to get the license plate
@@ -119,7 +111,7 @@ def predict_plate(image_path):
     predicted_plate = ''.join([char_list[int(p)] for p in out[0]])
     return predicted_plate
 
-# Example usage:
+
 new_image_path = 'img/car_img.jpg'
 predicted_label = predict_plate(new_image_path)
 print(f"Predicted license plate: {predicted_label}")
