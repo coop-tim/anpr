@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import pytesseract
 
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+
 def detect_number_plate(image_path):
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -29,12 +31,16 @@ def detect_number_plate(image_path):
         cv2.imshow('Original Image', img)
         cv2.imshow('Number Plate', cropped_plate)
         cv2.imwrite('detected_number_plate.jpg', cropped_plate)
+    
+        number_plate_text = pytesseract.image_to_string(cropped_plate, config='--psm 8')
+        print("Detected Number Plate Text:", number_plate_text.strip())
+
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-        return cropped_plate
+        return cropped_plate, number_plate_text.strip()
     else:
         print("Number plate not detected.")
-        return None
+        return None, None
 
-image_path = 'white.jpg'
-detect_number_plate(image_path)
+image_path = ''
+cropped_plate, number_plate_text = detect_number_plate(image_path)
