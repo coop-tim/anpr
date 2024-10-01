@@ -1,117 +1,135 @@
 import os
 import cv2
-import keras
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Reshape, LSTM, Bidirectional, Dense, Lambda
-from tensorflow.keras.models import Model
 from sklearn.model_selection import train_test_split
+from tensorflow.keras import layers, models
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-# Parameters
-img_width, img_height = 128, 64
-num_classes = len("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") + 1
-char_list = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+# Paths to yellow and white plates folder
+yellowplates_dir = 'yellowplate'  # Change to your path
+whiteplates_dir = 'whiteplate'  # Change to your path
 
-# Function to map characters to labels
-def encode_label(label):
-    return [char_list.index(ch) for ch in label]
-
-# Preprocess and load images
+# Load images and labels
 def load_images_and_labels(directory):
     images = []
     labels = []
     for filename in os.listdir(directory):
-        if filename.endswith(".png"):
+        if filename.endswith('.jpg') or filename.endswith('.png'):
             img_path = os.path.join(directory, filename)
-            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-            img = cv2.resize(img, (img_width, img_height))
-            img = img / 255.0  # Normalise
-            images.append(img)
-            label = filename.split('.')[0]
-            labels.append(encode_label(label))
-    return np.array(images), labels
+            image = cv2.imread(img_path)
+            image = cv2.resize(image, (128, 64))  # Resize to a standard size
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+            images.append(image)
+            labels.append(filename.split('.')[0])  # Use the file name as label (number plate)
+    return np.array(images), np.array(labels)
 
-yellow_images, yellow_labels = load_images_and_labels('yellowplate')
-white_images, white_labels = load_images_and_labels('whiteplate')
+# Load both datasets
+yellow_images, yellow_labels = load_images_and_labels(yellowplates_dir)
+white_images, white_labels = load_images_and_labels(whiteplates_dir)
 
-images = np.concatenate([yellow_images, white_images])
-labels = yellow_labels + white_labels
+# Combine yellow and white plates
+images = np.concatenate((yellow_images, white_images), axis=0)
+labels = np.concatenate((yellow_labels, white_labels), axis=0)
 
-X_train, X_test, y_train, y_test = train_test_split(images, labels, test_size=0.2, random_state=42)
+# Preprocess images
+images = images / 255.0  # Normalize to 0-1
 
-# Input shape for the model
-input_shape = (img_height, img_width, 1)
+# Convert labels into one-hot encoding (or you can tokenize the text)
+char_set = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+num_classes = len(char_set)
 
-# Define the CTC loss function
-@keras.saving.register_keras_serializable()
-def ctc_loss_lambda_func(args):
-    y_pred, labels, input_length, label_length = args
-    return tf.keras.backend.ctc_batch_cost(labels, y_pred, input_length, label_length)
+# Map each character in the label to an integer
+def label_to_onehot(label, max_length=7):
+    onehot = np.zeros((max_length, num_classes))
+    for i, char in enumerate(label):
+        if char in char_set:
+            index = char_set.index(char)
+            onehot[i, index] = 1
+    return onehot
 
-inputs = Input(shape=input_shape)
+# Apply one-hot encoding to all labels
+onehot_labels = np.array([label_to_onehot(label) for label in labels])
 
-# CNN layers for feature extraction
-x = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
-x = MaxPooling2D(pool_size=(2, 2))(x)
-x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
-x = MaxPooling2D(pool_size=(2, 2))(x)
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(images, onehot_labels, test_size=0.2, random_state=42)
 
-# Reshape the CNN output to feed into LSTM
-new_shape = ((img_width // 4), (img_height // 4) * 64)
-x = Reshape(target_shape=new_shape)(x)
+# Build the CNN model
+def build_model():
+    model = models.Sequential()
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(64, 128, 1)))
+    model.add(layers.MaxPooling2D((2, 2)))
+    model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+    model.add(layers.MaxPooling2D((2, 2)))
+    model.add(layers.Conv2D(128, (3, 3), activation='relu'))
+    model.add(layers.MaxPooling2D((2, 2)))
+    model.add(layers.Flatten())
+    model.add(layers.Dense(128, activation='relu'))
+    model.add(layers.Dropout(0.5))
+    
+    # Output layer
+    model.add(layers.Dense(7 * num_classes))  # 7 characters * 36 classes
+    model.add(layers.Reshape((7, num_classes)))  # Reshape the output to (7, 36)
+    model.add(layers.Softmax(axis=-1))  # Apply softmax to the last axis (characters)
 
-# LSTM layers for sequence learning
-x = Bidirectional(LSTM(128, return_sequences=True))(x)
-x = Bidirectional(LSTM(128, return_sequences=True))(x)
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    return model
 
-# Fully connected layer to classify each timestep into a character
-x = Dense(num_classes, activation='softmax')(x)
+model = build_model()
 
-# Define labels, input lengths, and label lengths for CTC loss
-labels = Input(name='the_labels', shape=[None], dtype='float32')
-input_length = Input(name='input_length', shape=[1], dtype='int64')
-label_length = Input(name='label_length', shape=[1], dtype='int64')
+# Image data generator for augmentation
+datagen = ImageDataGenerator(
+    rotation_range=10,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    shear_range=0.1,
+    zoom_range=0.1,
+    horizontal_flip=False
+)
 
-# CTC loss layer
-ctc_loss = Lambda(ctc_loss_lambda_func, output_shape=(1,), name='ctc')([x, labels, input_length, label_length])
-
-model = Model(inputs=[inputs, labels, input_length, label_length], outputs=ctc_loss)
-model.compile(optimizer='adam', loss={'ctc': lambda y_true, y_pred: y_pred})
-model.summary()
+# Reshape images for training
+X_train = X_train.reshape(-1, 64, 128, 1)
+X_test = X_test.reshape(-1, 64, 128, 1)
 
 # Train the model
-y_train_padded = tf.keras.preprocessing.sequence.pad_sequences(y_train, maxlen=10, padding='post')
-train_input_length = np.ones((len(X_train), 1)) * (img_width // 4)
-train_label_length = np.array([len(label) for label in y_train]).reshape(-1, 1)
+history = model.fit(datagen.flow(X_train, y_train, batch_size=32),
+                    validation_data=(X_test, y_test),
+                    epochs=20,
+                    steps_per_epoch=len(X_train) // 32)
 
-# Fit the model
-model.fit(x=[X_train, y_train_padded, train_input_length, train_label_length],
-          y=np.zeros(len(X_train)), epochs=10, batch_size=32)
+# Evaluate the model
+test_loss, test_acc = model.evaluate(X_test, y_test)
+print(f'Test accuracy: {test_acc}')
 
-# Save the model
-model.save('license_plate_model.h5')
+# Save the model as a .keras file
+model.save('number_plate_cnn_model.keras')
 
-model_inference = Model(inputs=inputs, outputs=x)
+# ---- PART 2: Load the saved model and test it with a new image ----
 
-# Testing with new image
-def predict_plate(image_path):
-    # Load model
-    model = tf.keras.models.load_model('license_plate_inference_model.h5', compile=False)
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    img = cv2.resize(img, (img_width, img_height))
-    img = img / 255.0
-    img = np.expand_dims(img, axis=[0, -1])
+# Load the saved .keras model
+loaded_model = tf.keras.models.load_model('number_plate_cnn_model.keras')
 
-    prediction = model.predict([img, np.ones((1, 1)) * (img_width // 4)])
+# Function to predict the number plate from a new image
+def predict_number_plate(model, image_path):
+    # Load and preprocess the image
+    image = cv2.imread(image_path)
+    image = cv2.resize(image, (128, 64))  # Resize to the same shape used for training
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+    image = image / 255.0  # Normalize
+    image = image.reshape(1, 64, 128, 1)  # Reshape for the model
     
-    # Decode the prediction to get the license plate
-    decoded = K.ctc_decode(prediction, input_length=np.ones((1,)) * (img_width // 4))[0][0]
-    out = tf.keras.backend.get_value(decoded)
+    # Predict the number plate
+    prediction = model.predict(image)
     
-    predicted_plate = ''.join([char_list[int(p)] for p in out[0]])
-    return predicted_plate
+    # Convert the one-hot encoded output to characters
+    plate = ''
+    for i in range(7):
+        char_index = np.argmax(prediction[0][i])
+        plate += char_set[char_index]
+    
+    return plate
 
-
-new_image_path = 'img/car_img.jpg'
-predicted_label = predict_plate(new_image_path)
-print(f"Predicted license plate: {predicted_label}")
+# Test the loaded model on a new image
+new_image_path = 'img/detected_number_plate.jpg'  # Provide the path to the new image for testing
+predicted_plate = predict_number_plate(loaded_model, new_image_path)
+print(f'Predicted number plate: {predicted_plate}')

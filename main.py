@@ -42,5 +42,5 @@ def detect_number_plate(image_path):
         print("Number plate not detected.")
         return None, None
 
-image_path = ''
+image_path = 'img/car_img.jpg'
 cropped_plate, number_plate_text = detect_number_plate(image_path)
