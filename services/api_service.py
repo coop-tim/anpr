@@ -22,7 +22,7 @@ class ANPRApiService:
         return self._insert_one(table, sql)
     
     # Bookings
-    def get_booking(self, id) -> dict:
+    def get_booking_by_id(self, id) -> dict:
         return self._get_by_id('Bookings', id)
     
     def get_booking_status(self, space_id, reg) -> dict:
@@ -49,7 +49,7 @@ class ANPRApiService:
         return self._upsert('Bookings', sql, id=booking_id)
     
     # Camera
-    def get_camera(self, id) -> dict:
+    def get_camera_by_id(self, id) -> dict:
         return self._get_by_id('Camera', id)
     
     def upsert_camera(self, site_id, location, camera_id=None) -> int:
@@ -61,7 +61,7 @@ class ANPRApiService:
         return self._upsert('Camera', sql, id=camera_id)
     
     # Driver
-    def get_driver(self, id) -> dict:
+    def get_driver_by_id(self, id) -> dict:
         return self._get_by_id('Drivers', id)
     
     def get_driver_contact_details(self, reg) -> dict:
@@ -82,7 +82,7 @@ class ANPRApiService:
         sql = f"INSERT INTO Session (SpaceId, RegNumber, Started, LastActivity, ReminderStatus, Expired) VALUES ({spaceId}, '{reg}', datetime(), datetime(), 0, 0)"
         return self._insert_one('Session', sql)
     
-    def get_session(self, id) -> dict:
+    def get_session_by_id(self, id) -> dict:
         return self._get_by_id('Session', id)
     
     def get_expired_sessions(self) -> list:
