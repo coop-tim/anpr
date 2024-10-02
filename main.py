@@ -2,14 +2,26 @@ from multiprocess import Process
 
 from services.session_manager import SessionManager
 from services.api_service import ANPRApiService
+from services.repository_service import ANPRRepositoryService
 
 if __name__ == '__main__':
     api_service = ANPRApiService()
-    repository = ANPRApiService()
+    repository = ANPRRepositoryService()
     sm = SessionManager(api_service, repository)
     p = Process(target=sm.monitor, args=())
     p.start()
     p.join()
+
+
+api_service = ANPRApiService()
+repository = ANPRRepositoryService()
+sm = SessionManager(api_service, repository)
+
+#result = api_service.get_expired_sessions()
+#result = sm._expired_spaces()
+#print(result)
+
+
 
 
 #result = sm.session_event(2, 'KM69FHP1')
@@ -17,7 +29,7 @@ if __name__ == '__main__':
 
 #api_service = ANPRApiService()
 
-# Session: Id, SpaceId, RegNumber, Started, Expired
+# Session: Id, SpaceId, RegNumber, Started, LastActivity, ReminderStatus, Expired
 #result = api_service.create_session(2, 'KM69FHP')
 #result = api_service.get_session(2, 'KM69FHP')
 #result = api_service.expire_session(2, 'KM69FHP')

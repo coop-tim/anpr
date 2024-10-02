@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from services.repository_service import ANPRRepositoryService
 
 class ANPRApiService:
@@ -36,6 +38,11 @@ class ANPRApiService:
         return self._upsert('Camera', sql, id=camera_id)
     
     # Driver
+    def get_driver_contact_details(self, reg) -> dict:
+        # todo: Might be possible to have multiple drivers assigned to a car
+        result = self._repository.execute(f"SELECT Name, Email, Mobile FROM Drivers WHERE RegNumber = '{reg}'")
+        return result.fetchone()
+
     def upsert_drivers(self, name, email, mobile, driver_id=None) -> int:
         if driver_id:
             sql = f"UPDATE Drivers SET Name = '{name}', Email = '{email}', Mobile = '{mobile}' WHERE Id = {driver_id}"
@@ -45,9 +52,22 @@ class ANPRApiService:
         return self._upsert('Drivers', sql, id=driver_id)
 
     # Session
-    def create_session(self, spaceId, regNumber) -> int:
-        sql = f"INSERT INTO Session (SpaceId, RegNumber, Started, Expired) VALUES ({spaceId}, '{regNumber}', datetime(), 0)"
+    def create_session(self, spaceId, reg) -> int:
+        sql = f"INSERT INTO Session (SpaceId, RegNumber, Started, LastActivity, ReminderStatus, Expired) VALUES ({spaceId}, '{reg}', datetime(), datetime(), 0, 0)"
         return self._insert_one('Session', sql)
+    
+    def get_expired_sessions(self) -> list:
+        dt = (datetime.utcnow()+timedelta(seconds=30)).strftime('%Y-%m-%d %H:%M:%S')
+        result = self._repository.execute(f"SELECT Id, SpaceId, RegNumber FROM Session WHERE Expired = 0 AND LastActivity <= datetime('{dt}')")
+        return result.fetchall() 
+    
+    def get_overdue_sessions(self) -> list:
+        pass
+
+    def get_sessions_ending(self) -> list:
+        dt = (datetime.utcnow()+timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S')
+        result = self._repository.execute(f"SELECT s.Id as SessionId FROM Bookings b JOIN Session s ON s.RegNumber = b.RegNumber AND s.SpaceId = b.SpaceId JOIN Drivers d ON d.Id = b.DriverId WHERE Expired = 0 AND End <= datetime('{dt}')")
+        return result.fetchall() 
 
     def get_session_id(self, spaceId, regNumber) -> int:
         result = self._repository.execute(f"SELECT Id FROM Session WHERE SpaceId = {spaceId} AND RegNumber = '{regNumber}'")
@@ -55,7 +75,13 @@ class ANPRApiService:
         return session_id[0] if session_id else None
     
     def expire_session(self, spaceId, regNumber) -> None:
-        self._repository.execute(f"UPDATE Session SET Expired = 1 WHERE (SpaceId = {spaceId} OR RegNumber = '{regNumber}') AND Expired = 0")
+        self._repository.execute(f"UPDATE Session SET Expired = 1 WHERE (SpaceId = {spaceId} AND RegNumber = '{regNumber}') AND Expired = 0")
+
+    def set_session_last_activity(self, id):
+        self._repository.execute(f"UPDATE Session SET LastActivity = datetime() WHERE Id = {id}")
+
+    def set_session_reminder_status(self, id, status):
+        self._repository.execute(f"UPDATE Session SET ReminderStatus = {status} WHERE SpaceId = {id}")
 
     # Space
     def get_space_id(self, marking) -> int:
