@@ -4,6 +4,25 @@ import pytesseract
 import numpy as np
 import imutils
 import cv2
+from pathlib import Path
+
+def getRegInSpaces(camera):
+    spaces = {};
+    for space in camera["spaces"]:
+        spaceId = space["spaceId"]
+        str = Path(f'result{spaceId}.txt').read_text()
+        if str == "": 
+            spaces[spaceId] = {
+                "spaceId": spaceId,
+                "reg":None
+            } 
+        else: 
+            spaces[spaceId] = {
+                "spaceId": spaceId,
+                "reg": str
+            }
+    return spaces
+
 class PyImageSearchANPR:
     def __init__(self, minAR=4, maxAR=6, debug=False):
         # store the minimum and maximum rectangular aspect ratio
