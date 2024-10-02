@@ -2,32 +2,38 @@ import time
 import fuzzy
 import uk_numplate_regex
 import anpr
+from services.api_service import ANPRApiService
+from services.repository_service import ANPRRepositoryService
+from services.session_manager import SessionManager
+import asyncio
+
+repo = ANPRRepositoryService()
+api = ANPRApiService(repo)
+sessionManager = SessionManager(api, repo)
 
 #Get camera details
+cameraId = api.upsert_camera(1, "Round the back of the shop", 1)
 camera = {
-    "id": 1,
-    "spaces":
-        {
-            1:
-            {
-                "spaceId": 1,
-                "top": 0,
-                "left": 0,
-                "right": 600,
-                "bottom": 600,
-                "currentSession": None
-            },
-            2: {
-                "spaceId": 2,
-                "top": 0,
-                "left": 0,
-                "right": 600,
-                "bottom": 600,
-                "currentSession": None
-            }
-            
-        }
-    
+    "id": cameraId,
+    "spaces": {}
+}
+spaceId = api.upsert_spaces(cameraId, 'CHARGE1', 10, 100, -400, 40, 1)
+camera["spaces"][spaceId] = {
+    "spaceId": spaceId,
+    "top": 0,
+    "left": 0,
+    "right": 600,
+    "bottom": 600,
+    "currentSession": None
+}
+spaceId = api.upsert_spaces(cameraId, 'CHARGE2', 10, 100, -400, 40, 2)
+camera["spaces"][spaceId] = {
+    "spaceId": spaceId,
+    "top": 0,
+    "left": 0,
+    "right": 600,
+    "bottom": 600,
+    "currentSession": None
 }
 
 currentSession = None
@@ -35,40 +41,51 @@ reg = None
 
 def getBooking(spaceId, time):
     print("Get booking for space ", spaceId, " at ", time)
+    #TODO
     return {
         "id": 1,
+        "spaceId": 1,
         "reg": "SF16GFM"
     }
 
 def startSession(reg, booking):
     print("Start session for ", reg)
+    sessionId = sessionManager.session_event(booking["spaceId"], reg)
     return {
-        "id": 1,
+        "id": sessionId,
         "bookingId": booking,
-        "spaceId": 1,
+        "spaceId": booking["spaceId"],
         "reg": reg
     }
 
 def endSession(session):
     print("End session for ", session["reg"])
+    #TODO
+    api.expire_session(session["spaceId"], session["reg"])
     return None
 
 def logSnapshot(reg, session):
     print("Continue session for ", reg)
-    return
+    sessionId = sessionManager.session_event(session["spaceId"], reg)
+    return {
+        "id": sessionId,
+        "bookingId": session["bookingId"],
+        "spaceId": session["spaceId"],
+        "reg": reg
+    }
 
 def checkSession(session):
+    #TODO
     return session
 
 #Enter snapshot loop
 
 spaces = camera["spaces"]
 
-while(True):
-    time.sleep(5)
+def takeSnapshot():
     print("Taking snapshot")
     
-    registrations = anpr.getRegInSpaces(camera)
+    registrations = asyncio.run(anpr.getRegInSpaces(camera))
 
     for spaceId in registrations:
         space = spaces[spaceId]
@@ -151,3 +168,8 @@ while(True):
                             currentSession  = space["currentSession"]= endSession(currentSession)
                             continue;
             continue;
+
+takeSnapshot()
+while(True):
+    time.sleep(5)
+    takeSnapshot()

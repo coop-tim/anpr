@@ -30,12 +30,12 @@ class SessionManager():
 
     def session_event(self, spaceId, regNumber) -> int:
         # Check for an open session
-        session_id = self._api_service.get_session(spaceId, regNumber)
+        session_id = self._api_service.get_session_id(spaceId, regNumber)
 
         # There is already an active session so just return the id
         if session_id:
             self._api_service.set_session_last_activity(session_id)
-            return session_id[0]
+            return session_id
         
         # This is a new session
         # Expire any other active sessions for this space or reg

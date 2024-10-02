@@ -8,7 +8,7 @@ class ANPRApiService:
         self._repository.execute(sql)
         result = self._repository.execute(f'SELECT MAX(Id) FROM {table}')
         id = result.fetchone()
-        return id[0]
+        return id
     
     def _upsert(self, table, sql, id=None) -> int:
         if id:
@@ -71,7 +71,10 @@ class ANPRApiService:
     def get_session_id(self, spaceId, regNumber) -> int:
         result = self._repository.execute(f"SELECT Id FROM Session WHERE SpaceId = {spaceId} AND RegNumber = '{regNumber}'")
         session_id = result.fetchone()
-        return session_id[0] if session_id else None
+        if session_id:
+            return session_id["Id"]
+        else:
+            return None
     
     def expire_session(self, spaceId, regNumber) -> None:
         self._repository.execute(f"UPDATE Session SET Expired = 1 WHERE (SpaceId = {spaceId} AND RegNumber = '{regNumber}') AND Expired = 0")
