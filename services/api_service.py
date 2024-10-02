@@ -4,11 +4,15 @@ class ANPRApiService:
     def __init__(self, repository):
         self._repository = repository
 
+    def _get_by_id(self, table, id) -> dict:
+        result = self._repository.execute(f"SELECT * FROM {table} WHERE Id = '{id}'")
+        return result.fetchone()
+
     def _insert_one(self, table, sql) -> int:
         self._repository.execute(sql)
-        result = self._repository.execute(f'SELECT MAX(Id) FROM {table}')
+        result = self._repository.execute(f'SELECT MAX(Id) AS Id FROM {table}')
         id = result.fetchone()
-        return id[0]
+        return id['Id']
     
     def _upsert(self, table, sql, id=None) -> int:
         if id:
@@ -18,6 +22,24 @@ class ANPRApiService:
         return self._insert_one(table, sql)
     
     # Bookings
+    def get_booking(self, id) -> dict:
+        return self._get_by_id('Bookings', id)
+    
+    def get_booking_status(self, space_id, reg) -> dict:
+        sql = f"""SELECT 
+            b.Id AS BookingId,
+            s.Id AS SessionId,
+            CASE    WHEN s.Id IS NULL THEN 'Not Started' 
+                    WHEN s.Expired = 1 THEN 'Complete' 
+                    WHEN s.ReminderStatus = 0 THEN 'Active'
+                    WHEN s.ReminderStatus = 1 THEN 'Expiring'
+                    ELSE 'Overdue'
+            END AS Status
+        FROM Bookings b JOIN Session s on s.RegNumber = b.RegNumber AND s.Id = b.SpaceId
+        WHERE s.Id = {space_id} AND s.RegNumber = '{reg}' AND s.Started <= datetime() AND b.End >= datetime()"""
+        result = self._repository.execute(sql)
+        return result.fetchone()
+
     def upsert_booking(self, space_id, driver_id, reg, start, end, booking_id=None) -> int:
         if booking_id:
             sql = f"UPDATE Bookings SET SpaceId = {space_id}, DriverId = {driver_id}, RegNumber = '{reg}', Start = datetime('{start}'), End = datetime('{end}') WHERE Id = {booking_id}"
@@ -27,6 +49,9 @@ class ANPRApiService:
         return self._upsert('Bookings', sql, id=booking_id)
     
     # Camera
+    def get_camera(self, id) -> dict:
+        return self._get_by_id('Camera', id)
+    
     def upsert_camera(self, site_id, location, camera_id=None) -> int:
         if camera_id:
             sql = f"UPDATE Camera SET SiteId = {site_id}, Location = '{location}' WHERE Id = {camera_id}"
@@ -36,6 +61,9 @@ class ANPRApiService:
         return self._upsert('Camera', sql, id=camera_id)
     
     # Driver
+    def get_driver(self, id) -> dict:
+        return self._get_by_id('Drivers', id)
+    
     def get_driver_contact_details(self, reg) -> dict:
         # todo: Might be possible to have multiple drivers assigned to a car
         result = self._repository.execute(f"SELECT Name, Email, Mobile FROM Drivers WHERE RegNumber = '{reg}'")
@@ -53,6 +81,9 @@ class ANPRApiService:
     def create_session(self, spaceId, reg) -> int:
         sql = f"INSERT INTO Session (SpaceId, RegNumber, Started, LastActivity, ReminderStatus, Expired) VALUES ({spaceId}, '{reg}', datetime(), datetime(), 0, 0)"
         return self._insert_one('Session', sql)
+    
+    def get_session(self, id) -> dict:
+        return self._get_by_id('Session', id)
     
     def get_expired_sessions(self) -> list:
         dt = (datetime.now()+timedelta(seconds=30)).strftime('%Y-%m-%d %H:%M:%S')
@@ -83,8 +114,11 @@ class ANPRApiService:
         self._repository.execute(f"UPDATE Session SET ReminderStatus = {status} WHERE SpaceId = {id}")
 
     # Space
+    def get_space_by_id(self, id) -> dict:
+        return self._get_by_id('Spaces', id)
+    
     def get_space_id(self, marking) -> int:
-        result = self._repository.execute(f"SELECT Id FROM Space WHERE Marking = '{marking}'")
+        result = self._repository.execute(f"SELECT Id FROM Spaces WHERE Marking = '{marking}'")
         space_id = result.fetchone()
         return space_id[0] if space_id else None
     
