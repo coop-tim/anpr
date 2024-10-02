@@ -6,22 +6,28 @@ import anpr
 #Get camera details
 camera = {
     "id": 1,
-    "spaces":[
+    "spaces":
         {
-            "spaceId": 1,
-            "top": 0,
-            "left": 0,
-            "right": 600,
-            "bottom": 600
-        },
-        {
-            "spaceId": 2,
-            "top": 0,
-            "left": 0,
-            "right": 600,
-            "bottom": 600
+            1:
+            {
+                "spaceId": 1,
+                "top": 0,
+                "left": 0,
+                "right": 600,
+                "bottom": 600,
+                "currentSession": None
+            },
+            2: {
+                "spaceId": 2,
+                "top": 0,
+                "left": 0,
+                "right": 600,
+                "bottom": 600,
+                "currentSession": None
+            }
+            
         }
-    ]
+    
 }
 
 currentSession = None
@@ -31,7 +37,7 @@ def getBooking(spaceId, time):
     print("Get booking for space ", spaceId, " at ", time)
     return {
         "id": 1,
-        "reg": "AA10AAA"
+        "reg": "SF16GFM"
     }
 
 def startSession(reg, booking):
@@ -56,16 +62,20 @@ def checkSession(session):
 
 #Enter snapshot loop
 
+spaces = camera["spaces"]
+
 while(True):
     time.sleep(5)
     print("Taking snapshot")
     
     registrations = anpr.getRegInSpaces(camera)
 
-    for index in registrations:
-        space = registrations[index]
-        reg = space["reg"]
-        spaceId = space["spaceId"]
+    for spaceId in registrations:
+        space = spaces[spaceId]
+        currentSession = space["currentSession"]
+        spaceSnapshot = registrations[spaceId]
+        reg = spaceSnapshot["reg"]
+        spaceId = spaceSnapshot["spaceId"]
         print("Reg in space ", spaceId, ": ", reg)
         if currentSession == None:
             if reg == None:
@@ -76,12 +86,13 @@ while(True):
             if booking != None:
                 print("Booking found: ", booking["id"])
                 if fuzzy.isMatch(booking['reg'], reg):
-                    currentSession = startSession(reg, booking)
+                    reg = booking['reg']
+                    currentSession = space["currentSession"] = startSession(reg, booking)
                     continue;
                 else:
                     print("Reg does not match booking")
                     if uk_numplate_regex.isUkNumberplate(reg):
-                        currentSession = startSession(reg, booking);
+                        currentSession = space["currentSession"] = startSession(reg, booking);
                         # alerting handled by central db
                     else:
                         print("Invalid reg: ", reg)
@@ -89,7 +100,7 @@ while(True):
             else:
                 print("No booking found")
                 if uk_numplate_regex.isUkNumberplate(reg):
-                        currentSession = startSession(reg, None);
+                        currentSession = space["currentSession"] = startSession(reg, None);
                         # alerting handled by central db
                 else:
                     print("Invalid reg: ", reg)
@@ -98,9 +109,10 @@ while(True):
             if reg == None:
                 # Session ending will be handled by central db, 
                 # here we check if the session has ended
-                currentSession = checkSession(currentSession)
+                currentSession = space["currentSession"] = checkSession(currentSession)
                 continue;
             if fuzzy.isMatch(currentSession['reg'], reg):
+                reg = currentSession['reg']
                 logSnapshot(reg, currentSession)
                 #overstay and alerting logic handled by central db
             else:
@@ -108,32 +120,34 @@ while(True):
                 if newBooking != None:
                     print("Booking found: ", newBooking["id"])
                     if fuzzy.isMatch(newBooking['reg'], reg):
-                        currentSession = endSession(currentSession)
-                        currentSession = startSession(reg, newBooking)
+                        reg = newBooking['reg']
+                        currentSession = space["currentSession"]= endSession(currentSession)
+                        currentSession = space["currentSession"] = startSession(reg, newBooking)
                         continue;
                     else:
                         print("Reg does not match booking")
                         if uk_numplate_regex.isUkNumberplate(reg):
-                            currentSession = endSession(currentSession)
-                            currentSession = startSession(reg, newBooking)
+                            currentSession  = space["currentSession"]= endSession(currentSession)
+                            currentSession  = space["currentSession"]= startSession(reg, newBooking)
                             # alerting handled by central db
                         else:
                             print("Invalid reg: ", reg)
-                            currentSession = endSession(currentSession)
+                            currentSession  = space["currentSession"]= endSession(currentSession)
                             continue;
                 else:
                     if fuzzy.isMatch(newBooking['reg'], reg):
-                        currentSession = endSession(currentSession)
-                        currentSession = startSession(reg, newBooking)
+                        reg = newBooking['reg']
+                        currentSession = space["currentSession"] = endSession(currentSession)
+                        currentSession = space["currentSession"] = startSession(reg, newBooking)
                         continue;
                     else:
                         print("Unexpected reg: ", reg, " expected ", newBooking['reg'])
                         if uk_numplate_regex.isUkNumberplate(reg):
-                            currentSession = endSession(currentSession)
-                            currentSession = startSession(reg, newBooking)
+                            currentSession  = space["currentSession"]= endSession(currentSession)
+                            currentSession  = space["currentSession"]= startSession(reg, newBooking)
                             # alerting handled by central db
                         else:
                             print("Invalid reg: ", reg)
-                            currentSession = endSession(currentSession)
+                            currentSession  = space["currentSession"]= endSession(currentSession)
                             continue;
             continue;
