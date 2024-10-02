@@ -15,7 +15,11 @@ class SessionManager():
             self._api_service.expire_session(s['SpaceId'], s['RegNumber'])
 
     def _overdue_sessions(self) -> None:
-        pass
+        sessions = self._api_service.get_overdue_sessions()
+        for s in sessions:
+            msg = "Your session has ended and is now overdue!"
+            self._notify(s['Name'], s['Email'], s['Mobile'], msg)
+            self._api_service.set_session_reminder_status(s['SessionId'], 2)
 
     def _session_ending_reminder(self) -> None:
         sessions_ending = self._api_service.get_sessions_ending()
@@ -52,7 +56,5 @@ class SessionManager():
 
             # Session overdue notifications
             self._overdue_sessions()
-
-
 
             time.sleep(5)

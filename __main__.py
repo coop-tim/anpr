@@ -5,24 +5,21 @@ from services.api_service import ANPRApiService
 from services.repository_service import ANPRRepositoryService
 
 if __name__ == '__main__':
-    api_service = ANPRApiService()
     repository = ANPRRepositoryService()
-    sm = SessionManager(api_service, repository)
-    p = Process(target=sm.monitor, args=())
+    api_service = ANPRApiService(repository)
+    manager = SessionManager(api_service, repository)
+    p = Process(target=manager.monitor, args=())
     p.start()
     p.join()
 
 
-api_service = ANPRApiService()
-repository = ANPRRepositoryService()
-sm = SessionManager(api_service, repository)
+#api_service = ANPRApiService()
+#repository = ANPRRepositoryService()
+#sm = SessionManager(api_service, repository)
 
 #result = api_service.get_expired_sessions()
 #result = sm._expired_spaces()
 #print(result)
-
-
-
 
 #result = sm.session_event(2, 'KM69FHP1')
 #print(result)
