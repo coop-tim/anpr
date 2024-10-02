@@ -14,7 +14,7 @@ class ANPRRepositoryService:
 
         if recreate:
             self._drop_tables()
-            
+        
         self._create_tables()
 
     def dict_factory(cursor, row):
