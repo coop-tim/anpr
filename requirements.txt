@@ -1,1 +1,4 @@
 pathos
+fastanpr
+thefuzz
+opencv-contrib-python
