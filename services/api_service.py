@@ -35,7 +35,7 @@ class ANPRApiService:
                     WHEN s.ReminderStatus = 1 THEN 'Expiring'
                     ELSE 'Overdue'
             END AS Status
-        FROM Bookings b JOIN Session s on s.RegNumber = b.RegNumber AND s.Id = b.SpaceId
+        FROM Bookings b LEFT JOIN Session s on s.RegNumber = b.RegNumber AND s.Id = b.SpaceId
         WHERE s.Id = {space_id} AND s.RegNumber = '{reg}' AND s.Started <= datetime() AND b.End >= datetime()"""
         result = self._repository.execute(sql)
         return result.fetchone()
