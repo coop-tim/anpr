@@ -6,11 +6,9 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras import layers, models
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-# Paths to yellow and white plates folder
-yellowplates_dir = 'yellowplate'  # Change to your path
-whiteplates_dir = 'whiteplate'  # Change to your path
+yellowplates_dir = 'yellowplate'
+whiteplates_dir = 'whiteplate'
 
-# Load images and labels
 def load_images_and_labels(directory):
     images = []
     labels = []
@@ -21,21 +19,18 @@ def load_images_and_labels(directory):
             image = cv2.resize(image, (128, 64))  # Resize to a standard size
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
             images.append(image)
-            labels.append(filename.split('.')[0])  # Use the file name as label (number plate)
+            labels.append(filename.split('.')[0])
     return np.array(images), np.array(labels)
 
-# Load both datasets
 yellow_images, yellow_labels = load_images_and_labels(yellowplates_dir)
 white_images, white_labels = load_images_and_labels(whiteplates_dir)
 
-# Combine yellow and white plates
 images = np.concatenate((yellow_images, white_images), axis=0)
 labels = np.concatenate((yellow_labels, white_labels), axis=0)
 
-# Preprocess images
 images = images / 255.0  # Normalize to 0-1
 
-# Convert labels into one-hot encoding (or you can tokenize the text)
+# Convert labels into one-hot encoding
 char_set = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 num_classes = len(char_set)
 
@@ -48,10 +43,8 @@ def label_to_onehot(label, max_length=7):
             onehot[i, index] = 1
     return onehot
 
-# Apply one-hot encoding to all labels
 onehot_labels = np.array([label_to_onehot(label) for label in labels])
 
-# Train-test split
 X_train, X_test, y_train, y_test = train_test_split(images, onehot_labels, test_size=0.2, random_state=42)
 
 # Build the CNN model
@@ -68,9 +61,9 @@ def build_model():
     model.add(layers.Dropout(0.5))
     
     # Output layer
-    model.add(layers.Dense(7 * num_classes))  # 7 characters * 36 classes
-    model.add(layers.Reshape((7, num_classes)))  # Reshape the output to (7, 36)
-    model.add(layers.Softmax(axis=-1))  # Apply softmax to the last axis (characters)
+    model.add(layers.Dense(7 * num_classes))
+    model.add(layers.Reshape((7, num_classes)))
+    model.add(layers.Softmax(axis=-1))
 
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     return model
@@ -87,7 +80,6 @@ datagen = ImageDataGenerator(
     horizontal_flip=False
 )
 
-# Reshape images for training
 X_train = X_train.reshape(-1, 64, 128, 1)
 X_test = X_test.reshape(-1, 64, 128, 1)
 
@@ -101,24 +93,18 @@ history = model.fit(datagen.flow(X_train, y_train, batch_size=32),
 test_loss, test_acc = model.evaluate(X_test, y_test)
 print(f'Test accuracy: {test_acc}')
 
-# Save the model as a .keras file
 model.save('number_plate_cnn_model.keras')
 
-# ---- PART 2: Load the saved model and test it with a new image ----
-
-# Load the saved .keras model
 loaded_model = tf.keras.models.load_model('number_plate_cnn_model.keras')
 
-# Function to predict the number plate from a new image
 def predict_number_plate(model, image_path):
     # Load and preprocess the image
     image = cv2.imread(image_path)
-    image = cv2.resize(image, (128, 64))  # Resize to the same shape used for training
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+    image = cv2.resize(image, (128, 64))
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     image = image / 255.0  # Normalize
-    image = image.reshape(1, 64, 128, 1)  # Reshape for the model
+    image = image.reshape(1, 64, 128, 1)
     
-    # Predict the number plate
     prediction = model.predict(image)
     
     # Convert the one-hot encoded output to characters
@@ -130,6 +116,6 @@ def predict_number_plate(model, image_path):
     return plate
 
 # Test the loaded model on a new image
-new_image_path = 'img/detected_number_plate.jpg'  # Provide the path to the new image for testing
+new_image_path = 'img/detected_number_plate.jpg'
 predicted_plate = predict_number_plate(loaded_model, new_image_path)
 print(f'Predicted number plate: {predicted_plate}')
