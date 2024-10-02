@@ -1,2 +1,4 @@
 from thefuzz import fuzz
-print(fuzz.ratio("NG771DNL", "NG71DNL"))
+
+def isMatch(str1, str2, threshold = 90):
+    return fuzz.ratio(str1, str2) >= threshold
