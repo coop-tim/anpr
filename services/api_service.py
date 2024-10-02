@@ -102,7 +102,10 @@ class ANPRApiService:
     def get_session_id(self, spaceId, regNumber) -> int:
         result = self._repository.execute(f"SELECT Id FROM Session WHERE SpaceId = {spaceId} AND RegNumber = '{regNumber}'")
         session_id = result.fetchone()
-        return session_id[0] if session_id else None
+        if session_id:
+            return session_id["Id"]
+        else:
+            return None
     
     def expire_session(self, spaceId, regNumber) -> None:
         self._repository.execute(f"UPDATE Session SET Expired = 1 WHERE (SpaceId = {spaceId} AND RegNumber = '{regNumber}') AND Expired = 0")
