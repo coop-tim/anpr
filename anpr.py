@@ -8,8 +8,8 @@ from pathlib import Path
 
 def getRegInSpaces(camera):
     spaces = {};
-    for space in camera["spaces"]:
-        spaceId = space["spaceId"]
+    for spaceId in camera["spaces"]:
+        space = camera["spaces"][spaceId]
         str = Path(f'result{spaceId}.txt').read_text()
         if str == "": 
             spaces[spaceId] = {
